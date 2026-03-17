@@ -63,7 +63,6 @@ A container cannot restart itself — any script running inside the container is
 - ⚙️ **Full config flow** — set up entirely from the UI, no `configuration.yaml` changes
 - 🔧 **Options flow** — adjust all settings post-setup without re-adding the integration
 - 📋 **Structured timestamped logging** on both the HA component and host-side scripts
-- 🚀 **`deploy.sh`** — one-command deployment to your Raspberry Pi
 
 ---
 
@@ -159,8 +158,6 @@ sudo systemctl start  ha-container-updater-watcher.service
 sudo systemctl status ha-container-updater-watcher.service
 journalctl -u ha-container-updater-watcher.service -f
 ```
-
-> **Tip:** The `deploy.sh` script in the repository automates both parts — it rsyncs the HA component to your Pi and installs the host scripts and systemd service in one command. Run `./deploy.sh --help` for options.
 
 ---
 
