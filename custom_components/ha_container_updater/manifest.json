@@ -1,0 +1,17 @@
+{
+  "domain": "ha_container_updater",
+  "name": "HA Container Updater",
+  "version": "1.0.0",
+  "documentation": "https://github.com/cskolny/ha-container-updater",
+  "issue_tracker": "https://github.com/cskolny/ha-container-updater/issues",
+  "codeowners": ["@cskolny"],
+  "requirements": [],
+  "dependencies": [],
+  "after_dependencies": [],
+  "iot_class": "cloud_polling",
+  "integration_type": "service",
+  "single_config_entry": true,
+  "config_flow": true,
+  "quality_scale": "silver",
+  "min_ha_version": "2025.12.0"
+}
