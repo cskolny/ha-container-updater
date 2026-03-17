@@ -2,16 +2,16 @@
 # =============================================================================
 # ha-container-updater-watcher.sh
 # Host-side daemon loop — watches for the trigger file written by the HA
-# Docker Updater custom component, then calls ha-container-updater.sh.
+# Container Updater custom component, then calls ha-container-updater.sh.
 #
 # Designed to be run as a systemd service (see ha-container-updater-watcher.service).
 # Should NOT be called manually in normal operation.
 #
 # Security model
 # ──────────────
-#  1. The trigger file must contain the magic string defined in the HA component
-#     (TRIGGER_FILE_MAGIC = "ha_container_updater_REQUESTED") to prevent accidental
-#     or unauthorised triggers from stray files.
+#  1. The trigger file must be valid JSON and contain the magic string
+#     "ha_container_updater_REQUESTED" to prevent accidental or unauthorised
+#     triggers from stray files.
 #  2. Only one update can run at a time; a lock file prevents concurrent runs.
 #  3. The trigger file is removed immediately after it is validated so a
 #     crashed watcher restart doesn't re-trigger.
@@ -25,7 +25,6 @@ UPDATER_SCRIPT="${HA_UPDATER_SCRIPT:-/usr/local/bin/ha-container-updater.sh}"
 LOG_FILE="${HA_UPDATER_LOG_FILE:-/home/pi/homeassistant/ha-container-updater.log}"
 LOCK_FILE="${HA_UPDATER_LOCK_FILE:-/tmp/ha-container-updater.lock}"
 POLL_INTERVAL="${HA_UPDATER_POLL_INTERVAL:-5}"   # seconds between trigger checks
-MAGIC_STRING="ha_container_updater_REQUESTED"
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 _log() {
@@ -66,24 +65,25 @@ while true; do
     if [[ -f "${TRIGGER_FILE}" ]]; then
         log_info "Trigger file detected: ${TRIGGER_FILE}"
 
-        # Validate magic string and optional JSON payload
+        # Read the trigger file content once
         file_content="$(cat "${TRIGGER_FILE}" 2>/dev/null || true)"
-        updater_args_array=()
 
-        # Require JSON payload that includes magic and at least one valid arg.
+        # Parse the JSON payload and extract updater arguments.
+        # Use ||true pattern so parse_status captures the real exit code
+        # without triggering set -e on failure.
         parse_output=""
         parse_status=0
-        if ! parse_output=$(python3 -c '
-import json,sys
+        parse_output=$(python3 -c '
+import json, sys
 try:
     data = json.loads(sys.stdin.read())
 except Exception as exc:
     print(f"PARSE JSON ERROR: {exc}", file=sys.stderr)
     sys.exit(1)
 if not isinstance(data, dict) or data.get("magic") != "ha_container_updater_REQUESTED":
-    print("PARSE MAGIC ERROR", file=sys.stderr)
+    print("PARSE MAGIC ERROR: missing or wrong magic field", file=sys.stderr)
     sys.exit(1)
-args=[]
+args = []
 if "compose_dir" in data:
     args.extend(["--compose-dir", data["compose_dir"]])
 if "compose_file" in data:
@@ -91,14 +91,10 @@ if "compose_file" in data:
 if "service_name" in data:
     args.extend(["--service", data["service_name"]])
 if "prune_images" in data:
-    if data["prune_images"]:
-        args.append("--prune")
-    else:
-        args.append("--no-prune")
+    args.append("--prune" if data["prune_images"] else "--no-prune")
 print("\n".join(args))
-' <<< "$file_content"); then
-    parse_status=$?
-fi
+' <<< "${file_content}") || parse_status=$?
+
         if [[ ${parse_status} -ne 0 ]]; then
             log_warn "Trigger file content invalid (JSON parse failed or magic mismatch). Ignoring."
             rm -f "${TRIGGER_FILE}"
@@ -106,12 +102,12 @@ fi
             continue
         fi
 
+        # Build the args array from the parsed output
         updater_args_array=()
         while IFS= read -r arg; do
-            if [[ -n "${arg}" ]]; then
-                updater_args_array+=("${arg}")
-            fi
+            [[ -n "${arg}" ]] && updater_args_array+=("${arg}")
         done <<< "${parse_output}"
+
         if [[ ${#updater_args_array[@]} -eq 0 ]]; then
             log_warn "Trigger JSON payload contained no recognized args; ignoring."
             rm -f "${TRIGGER_FILE}"
@@ -141,8 +137,7 @@ fi
         # Acquire lock
         echo $$ > "${LOCK_FILE}"
 
-        log_info "Invoking updater script: ${UPDATER_SCRIPT} ${updater_args_array[*]}"
-        log_info "Executing updater with args: ${updater_args_array[*]}"
+        log_info "Invoking updater: ${UPDATER_SCRIPT} ${updater_args_array[*]}"
         if "${UPDATER_SCRIPT}" "${updater_args_array[@]}"; then
             log_info "Update completed successfully."
         else

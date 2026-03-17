@@ -4,7 +4,7 @@ Setup flow
 ──────────
 Step 1 (user)  — collect compose directory, compose filename, service name,
                  trigger file path, image prune preference, and poll interval.
-Step 2          — validate that the trigger-file *directory* is accessible from
+                 Validates that the trigger-file *directory* is accessible from
                  inside the container (it must be a volume mount).
 
 Options flow
@@ -15,8 +15,8 @@ removing and re-adding the integration.
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from typing import Any
 
 import voluptuous as vol
@@ -46,6 +46,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 # ── Validation helpers ────────────────────────────────────────────────────────
+
 
 def _validate_trigger_dir(trigger_path: str) -> str | None:
     """Return an error key if the trigger file's parent directory is unusable.
@@ -95,7 +96,8 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
 
 # ── Config flow ───────────────────────────────────────────────────────────────
 
-class HADockerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+
+class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle the initial setup config flow."""
 
     VERSION = 1
@@ -141,14 +143,15 @@ class HADockerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
-    ) -> HADockerUpdaterOptionsFlow:
+    ) -> HAContainerUpdaterOptionsFlow:
         """Return the options flow handler."""
-        return HADockerUpdaterOptionsFlow()
+        return HAContainerUpdaterOptionsFlow()
 
 
 # ── Options flow ──────────────────────────────────────────────────────────────
 
-class HADockerUpdaterOptionsFlow(config_entries.OptionsFlow):
+
+class HAContainerUpdaterOptionsFlow(config_entries.OptionsFlow):
     """Allow the user to adjust settings after initial setup."""
 
     async def async_step_init(

@@ -23,13 +23,13 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
-    DOMAIN,
-    LOG_PREFIX,
-    REPO_API_URL,
-    GITHUB_TIMEOUT,
-    GITHUB_RATE_LIMIT_HEADER,
     CONF_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    GITHUB_RATE_LIMIT_HEADER,
+    GITHUB_TIMEOUT,
+    LOG_PREFIX,
+    REPO_API_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ def _is_update_available(installed: str, latest: str) -> bool:
     return latest_v > installed_v
 
 
-class HADockerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that fetches the latest HA release from GitHub.
 
     Data shape returned by ``_async_update_data``:
@@ -77,7 +77,8 @@ class HADockerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        self._entry = entry
+        # entry is not stored as an instance attribute because it is only needed
+        # here to read the scan interval at construction time.
         scan_seconds = entry.options.get(
             CONF_SCAN_INTERVAL,
             entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
@@ -120,11 +121,18 @@ class HADockerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             LOG_PREFIX,
                             rate_remaining,
                         )
-                        # Return stale data rather than an error to keep entity available.
-                        # _from_cache=True is recorded so log readers can tell the
-                        # installed_version and latest_version fields may be outdated.
+                        # Consume the response body before returning so aiohttp
+                        # can cleanly release the connection back to the pool.
+                        await resp.read()
+                        # Return stale data rather than an error to keep the entity
+                        # available. _from_cache=True signals to log readers that
+                        # the version fields may be outdated.
                         if self.data:
-                            return {**self.data, "rate_limit_remaining": rate_remaining, "_from_cache": True}
+                            return {
+                                **self.data,
+                                "rate_limit_remaining": rate_remaining,
+                                "_from_cache": True,
+                            }
 
                     if resp.status == 403:
                         raise UpdateFailed(

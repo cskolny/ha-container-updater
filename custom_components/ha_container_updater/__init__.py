@@ -10,9 +10,10 @@ This integration operates in two parts:
    - ``config_flow.py``   — guided UI setup; stores config in a ConfigEntry
 
 2. **Host-side watcher** (runs on the Raspberry Pi / Docker host)
-   - ``ha-container-updater-watcher.sh``     — performs docker-compose pull + up
-   - ``ha-container-updater-watcher.service`` — systemd unit that watches for the
-                                            trigger file and calls the script
+   - ``ha-container-updater-watcher.sh``      — polls for the trigger file and
+                                                calls ha-container-updater.sh
+   - ``ha-container-updater.sh``              — executes docker compose pull + up
+   - ``ha-container-updater-watcher.service`` — systemd unit managing the watcher
 
 The HA component never calls docker-compose directly — it cannot, because
 restarting the container would kill the running process.  Instead it writes a
@@ -36,7 +37,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_COORDINATOR, DOMAIN, LOG_PREFIX
-from .coordinator import HADockerUpdateCoordinator
+from .coordinator import HAContainerUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     hass.data.setdefault(DOMAIN, {})
 
-    coordinator = HADockerUpdateCoordinator(hass, entry)
+    coordinator = HAContainerUpdateCoordinator(hass, entry)
 
     # Perform an initial refresh so entities have data on first render.
     # If this raises, ConfigEntryNotReady propagates and HA retries.

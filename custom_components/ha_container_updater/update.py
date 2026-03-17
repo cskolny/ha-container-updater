@@ -21,6 +21,15 @@ Without a device the naming rules are:
 
 The ``title`` property (separate from entity name) is shown inside the update
 more-info dialog as the software title line.
+
+Progress tracking
+─────────────────
+``in_progress`` is set to True as soon as the trigger file is written and
+cleared only after the host lock file disappears (or timeouts are reached).
+The lock file is written by the watcher when it starts the update and removed
+when it finishes — regardless of success or failure.  If the HA container
+restarts mid-update (the normal case for a successful update), HA itself
+restarts and ``in_progress`` resets naturally via entity reconstruction.
 """
 
 from __future__ import annotations
@@ -58,16 +67,17 @@ from .const import (
     LOG_PREFIX,
     TRIGGER_FILE_MAGIC,
 )
-from .coordinator import HADockerUpdateCoordinator
+from .coordinator import HAContainerUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-_POST_INSTALL_POLL_DELAY = 120
-
 UPDATE_ENTITY_DESCRIPTION = UpdateEntityDescription(
-    key="ha_docker_update",
+    key="ha_container_updater",
     name="Home Assistant Core Update",
     icon="mdi:home-assistant",
+    # translation_key is intentionally None: the entity name is fixed in
+    # English regardless of locale because it refers to the specific software
+    # product "Home Assistant Core".  Translating it would cause confusion.
     translation_key=None,
 )
 
@@ -78,11 +88,11 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the update entity from a config entry."""
-    coordinator: HADockerUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
-    async_add_entities([HADockerUpdateEntity(coordinator, entry)])
+    coordinator: HAContainerUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
+    async_add_entities([HAContainerUpdateEntity(coordinator, entry)])
 
 
-class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateEntity):
+class HAContainerUpdateEntity(CoordinatorEntity[HAContainerUpdateCoordinator], UpdateEntity):
     """Represents the Home Assistant Docker container update state."""
 
     entity_description = UPDATE_ENTITY_DESCRIPTION
@@ -92,7 +102,7 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
 
     def __init__(
         self,
-        coordinator: HADockerUpdateCoordinator,
+        coordinator: HAContainerUpdateCoordinator,
         entry: ConfigEntry,
     ) -> None:
         super().__init__(coordinator)
@@ -108,6 +118,10 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
             CONF_TRIGGER_FILE_PATH,
             entry.data.get(CONF_TRIGGER_FILE_PATH, DEFAULT_TRIGGER_FILE),
         )
+        # CONF_LOCK_FILE is not exposed in the config/options flow — users who
+        # need a custom path can set HA_UPDATER_LOCK_FILE in the systemd service
+        # and update this value via a future options field.  The default matches
+        # the systemd service Environment= value in ha-container-updater-watcher.service.
         self._lock_file: str = entry.options.get(
             CONF_LOCK_FILE,
             entry.data.get(CONF_LOCK_FILE, DEFAULT_LOCK_FILE),
@@ -175,6 +189,7 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
         return summary
 
     def _get_last_backup_summary(self) -> str | None:
+        """Return a human-readable age string for the most recent HA backup, or None."""
         try:
             backup_states = self.hass.states.async_all("backup")
             if not backup_states:
@@ -189,7 +204,8 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
             else:
                 age = f"{hours} hours ago"
             return f"Last automatic backup {age}."
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("%s Could not retrieve backup summary: %s", LOG_PREFIX, exc)
             return None
 
     @property
@@ -286,16 +302,27 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
             update_started = await self._wait_for_update_start()
             if not update_started:
                 _LOGGER.warning(
-                    "%s Update watcher did not start within timeout; proceeding without progress tracking.",
+                    "%s Update watcher did not acquire lock within 90 s after trigger was written. "
+                    "The watcher service may not be running. Check: "
+                    "sudo systemctl status ha-container-updater-watcher",
                     LOG_PREFIX,
                 )
             else:
-                _LOGGER.info("%s Update started. Waiting for completion...", LOG_PREFIX)
+                _LOGGER.info("%s Update started (lock acquired). Waiting for completion...", LOG_PREFIX)
                 update_finished = await self._wait_for_update_finish()
                 if not update_finished:
+                    # This almost always means the container restarted mid-update
+                    # (i.e. the update succeeded and HA came back up fresh).
+                    # It can also mean the update script ran for > 30 min or the
+                    # watcher died without releasing the lock.  Either way we
+                    # clear in_progress and let the next coordinator poll resolve
+                    # the true installed version.
                     _LOGGER.warning(
-                        "%s Update watcher did not finish within timeout; marking update complete.",
+                        "%s Lock file still present after 30 min timeout. "
+                        "The update may have succeeded (container restarted) or failed. "
+                        "Check: tail -f %s/ha-container-updater.log",
                         LOG_PREFIX,
+                        self._compose_dir,
                     )
 
             try:
@@ -311,7 +338,7 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
     # ── Private helpers ───────────────────────────────────────────────────────
 
     async def _wait_for_update_start(self, timeout: int = 90) -> bool:
-        """Wait for host watcher to claim the lock file after trigger file creation."""
+        """Wait for the host watcher to acquire the lock file (signals update started)."""
         end_time = dt_util.utcnow().timestamp() + timeout
         while dt_util.utcnow().timestamp() < end_time:
             if os.path.exists(self._lock_file):
@@ -320,7 +347,12 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
         return False
 
     async def _wait_for_update_finish(self, timeout: int = 1800) -> bool:
-        """Wait for host update lock file to be removed, indicating update completion."""
+        """Wait for the host lock file to disappear (signals update finished).
+
+        The lock is released by the watcher whether the update succeeded or
+        failed.  A successful update typically causes the HA container to
+        restart before this timeout is reached, resetting in_progress naturally.
+        """
         end_time = dt_util.utcnow().timestamp() + timeout
         while dt_util.utcnow().timestamp() < end_time:
             if not os.path.exists(self._lock_file):
@@ -330,7 +362,11 @@ class HADockerUpdateEntity(CoordinatorEntity[HADockerUpdateCoordinator], UpdateE
 
     @staticmethod
     def _write_trigger_file(path: str, payload: str) -> None:
-        """Atomic trigger payload write (write-then-rename)."""
+        """Atomic trigger payload write (write-then-rename).
+
+        Using os.replace ensures the watcher never observes a partially-written
+        file — it either sees the complete JSON or nothing at all.
+        """
         trigger_dir = os.path.dirname(path)
         if trigger_dir and not os.path.isdir(trigger_dir):
             raise OSError(

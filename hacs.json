@@ -1,6 +1,6 @@
 {
   "name": "HA Container Updater",
-  "domains": ["update"],
+  "domain": "ha_container_updater",
   "iot_class": "cloud_polling",
   "homeassistant": "2025.12.0"
 }
