@@ -13,5 +13,5 @@
   "single_config_entry": true,
   "config_flow": true,
   "quality_scale": "bronze",
-  "min_ha_version": "2025.12.0"
+  "min_ha_version": "2026.3.0"
 }

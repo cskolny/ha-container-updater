@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+# ── Project metadata ──────────────────────────────────────────────────────────
+[project]
+name = "ha-container-updater"
+version = "1.1.0"
+description = "Home Assistant custom integration — update your HA Docker container from the UI"
+license = { text = "MIT" }
+requires-python = ">=3.14"
+
+# ── Ruff (lint + format) ──────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "I",    # isort
+  "UP",   # pyupgrade
+  "B",    # flake8-bugbear
+  "C4",   # flake8-comprehensions
+  "ANN",  # flake8-annotations
+  "S",    # flake8-bandit (security)
+  "BLE",  # flake8-blind-except
+  "RUF",  # ruff-specific rules
+]
+ignore = [
+  "ANN101",  # Missing type annotation for `self`
+  "ANN102",  # Missing type annotation for `cls`
+  "ANN401",  # Dynamically typed expressions (Any) — needed for HA APIs
+  "S108",    # Probable insecure usage of tmp — intentional /tmp use documented
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["custom_components.ha_container_updater"]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ── Mypy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_return_any = true
+warn_unreachable = true
+disallow_any_generics = false  # Required for HA coordinator generic usage
+ignore_missing_imports = true  # homeassistant stubs not distributed
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

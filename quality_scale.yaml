@@ -1,0 +1,33 @@
+# Integration Quality Scale — HA Container Updater
+# https://developers.home-assistant.io/docs/core/integration-quality-scale/
+#
+# This integration targets the Bronze tier. Rules that do not apply are
+# marked with status: exempt and a brief explanation.
+rules:
+  # ── Bronze (mandatory) ──────────────────────────────────────────────────────
+  config-flow:
+    status: done
+    comment: >
+      Full config flow and options flow implemented in config_flow.py.
+
+  entity-unique-id:
+    status: done
+    comment: >
+      The update entity sets _attr_unique_id = "ha_container_updater_update".
+
+  action-setup:
+    status: exempt
+    comment: >
+      This integration does not register custom service actions.
+
+  # ── Silver (aspirational — not yet claimed) ─────────────────────────────────
+  entity-unavailable:
+    status: done
+    comment: >
+      The entity's available property returns coordinator.last_update_success,
+      correctly marking it unavailable when the GitHub API is unreachable.
+
+  parallel-updates:
+    status: exempt
+    comment: >
+      Only one update entity exists; parallel-updates does not apply.

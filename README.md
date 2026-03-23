@@ -1,13 +1,17 @@
 # HA Container Updater — Home Assistant Custom Integration
 
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.12%2B-blue?logo=homeassistant)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.3%2B-blue?logo=homeassistant)](https://www.home-assistant.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![Release](https://img.shields.io/github/v/release/cskolny/ha-container-updater)](https://github.com/cskolny/ha-container-updater/releases)
+[![Lint](https://github.com/cskolny/ha-container-updater/actions/workflows/lint.yml/badge.svg)](https://github.com/cskolny/ha-container-updater/actions/workflows/lint.yml)
+[![Tests](https://github.com/cskolny/ha-container-updater/actions/workflows/tests.yml/badge.svg)](https://github.com/cskolny/ha-container-updater/actions/workflows/tests.yml)
 
 Update your **Home Assistant Docker container** directly from the HA UI — no SSH, no terminal, no manual `docker compose` commands. A new update entity appears in **Settings → System → Updates** alongside HA's own built-in update cards.
 
 <img src="screenshots/update-dialog.png" width="400" height="300" alt="Update Dialog">
+
+---
 
 ## How It Works
 
@@ -28,15 +32,15 @@ A container cannot restart itself — any script running inside the container is
 │  │       trigger file              │  │  volume mount         │
 │  └─────────────────────────────────┘  │                       │
 │                                       ▼                        │
-│  /tmp/ha-container-updater-trigger  ◄─────┘                       │
+│  /tmp/ha-container-updater-trigger ◄──┘                       │
 │           │                                                     │
-│           │  (poll every 5s)                                   │
+│           │  (poll every 5 s)                                  │
 │           ▼                                                     │
-│  ha-container-updater-watcher.sh (systemd service)                 │
+│  ha-container-updater-watcher.sh (systemd service)             │
 │    1. Validates magic string                                    │
 │    2. Removes trigger file                                      │
 │    3. Acquires lock                                             │
-│    4. Calls ha-container-updater.sh                               │
+│    4. Calls ha-container-updater.sh                            │
 │         └─ docker compose pull homeassistant                   │
 │         └─ docker compose up -d --force-recreate               │
 │         └─ docker image prune -af  (optional)                  │
@@ -57,21 +61,21 @@ A container cannot restart itself — any script running inside the container is
 - 🛡️ **GitHub API rate-limit awareness** — returns cached data instead of erroring when the limit is nearly exhausted
 - ⚡ **Atomic trigger file writes** — write-then-rename so the watcher never sees a partial file
 - 🔒 **Magic string validation** — the watcher ignores stray or empty files
-- 🔒 **Lock file** prevents concurrent update runs, and UI now shows update progress using Home Assistant update progress support
+- 🔒 **Lock file** prevents concurrent update runs; UI shows update progress via HA's update-progress support
 - 🐳 **Docker Compose v1 and v2** both supported; v2 preferred
 - 🗑️ **Optional image pruning** after a successful update to reclaim disk space
 - ⚙️ **Full config flow** — set up entirely from the UI, no `configuration.yaml` changes
 - 🔧 **Options flow** — adjust all settings post-setup without re-adding the integration
+- 🖼️ **Inline brand icon** — integration icon served locally (requires HA 2026.3+, included in the `brand/` folder)
 - 📋 **Structured timestamped logging** on both the HA component and host-side scripts
 
 ---
 
 ## Requirements
 
-- Home Assistant running in Docker (via `docker-compose` or `docker compose`)
+- Home Assistant **2026.3 or later** running in Docker (via `docker-compose` or `docker compose`)
 - Docker Compose v1 or v2 (v2 preferred)
 - A systemd-based Linux host (Raspberry Pi OS, Debian, Ubuntu)
-- Home Assistant **2025.12 or later**
 
 ---
 
@@ -81,7 +85,8 @@ A container cannot restart itself — any script running inside the container is
 
 **Manual:**
 
-1. Copy the `custom_components/ha_container_updater/` folder into your HA config directory:
+1. Copy `custom_components/ha_container_updater/` into your HA config directory:
+
    ```
    config/
    └── custom_components/
@@ -92,12 +97,16 @@ A container cannot restart itself — any script running inside the container is
            ├── config_flow.py
            ├── const.py
            ├── manifest.json
+           ├── quality_scale.yaml
            ├── strings.json
-           └── translations/
-               └── en.json
+           ├── translations/
+           │   └── en.json
+           └── brand/
+               └── icon.svg
    ```
 
 2. Add a volume mount to your `docker-compose.yml` so the trigger file path is shared between the container and the host:
+
    ```yaml
    services:
      homeassistant:
@@ -107,11 +116,12 @@ A container cannot restart itself — any script running inside the container is
          - /tmp:/tmp          # ← Shares /tmp with the host for the trigger file
          - /etc/localtime:/etc/localtime:ro
    ```
-   > **Security note:** Mounting `/tmp` is the simplest option. For a more restrictive setup, create a dedicated directory (e.g., `/home/pi/ha_ipc`) and mount that instead, then set your trigger file path accordingly in the HA setup form.
+
+   > **Security note:** Mounting `/tmp` is the simplest option. For a more restrictive setup, create a dedicated directory (e.g. `/home/pi/ha_ipc`) and mount that instead, then set your trigger file path accordingly in the HA setup form.
 
 3. Restart Home Assistant.
 
-4. Go to **Settings → Devices & Services → Add Integration → HA Container Updater**
+4. Go to **Settings → Devices & Services → Add Integration → HA Container Updater**.
 
 5. Fill in the setup form:
 
@@ -172,9 +182,7 @@ Once both parts are installed, a **Home Assistant Core Update** entity appears i
 | **Installing** | Trigger file written; host watcher is running the update |
 | **Unavailable** | GitHub API unreachable; will retry at the next interval |
 
-### Automations
-
-You can automate updates using standard HA update entity triggers:
+### Automation Example
 
 ```yaml
 automation:
@@ -210,7 +218,7 @@ All options are adjustable post-setup via **Settings → Devices & Services → 
 
 | Location | Contents |
 |---|---|
-| HA logs (`Settings → System → Logs`) | Coordinator fetch results, trigger write status |
+| HA logs (**Settings → System → Logs**) | Coordinator fetch results, trigger write status |
 | `/home/pi/homeassistant/ha-container-updater.log` | Host-side watcher and updater script output |
 | `journalctl -u ha-container-updater-watcher` | systemd service lifecycle events |
 
@@ -246,12 +254,31 @@ All options are adjustable post-setup via **Settings → Devices & Services → 
 
 **`docker compose pull` fails**
 - Check network connectivity from the host.
-- Run `docker compose pull homeassistant` manually to see the full error output.
+- Run `docker compose pull homeassistant` manually to see the full error.
 
 **Watcher service fails to start**
 - Check `journalctl -u ha-container-updater-watcher -n 50` for errors.
 - Confirm the scripts are executable: `ls -la /usr/local/bin/ha-container-updater*.sh`
 - Confirm your user is in the `docker` group: `groups pi`
+
+---
+
+## Development
+
+```bash
+# Install dependencies
+pip install pytest voluptuous ruff mypy
+
+# Run tests
+pytest -v
+
+# Lint
+ruff check custom_components/ tests/
+ruff format --check custom_components/ tests/
+
+# Type check
+mypy custom_components/ha_container_updater/
+```
 
 ---
 

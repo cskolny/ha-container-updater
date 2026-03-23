@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (ruff + mypy)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy voluptuous
+
+      - name: Ruff — check (lint)
+        run: ruff check custom_components/ tests/
+
+      - name: Ruff — format check
+        run: ruff format --check custom_components/ tests/
+
+      - name: Mypy — type check
+        run: mypy custom_components/ha_container_updater/

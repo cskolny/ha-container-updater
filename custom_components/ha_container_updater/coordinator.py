@@ -1,10 +1,10 @@
 """DataUpdateCoordinator for HA Container Updater.
 
 Responsible for:
-  - Polling the GitHub Releases API on a configurable interval
-  - Parsing and comparing CalVer version strings correctly
-  - Surfacing structured errors and availability state to entities
-  - Respecting GitHub API rate-limit headers to avoid throttling
+- Polling the GitHub Releases API on a configurable interval.
+- Parsing and comparing CalVer version strings correctly.
+- Surfacing structured errors and availability state to entities.
+- Respecting GitHub API rate-limit headers to avoid throttling.
 """
 
 from __future__ import annotations
@@ -32,73 +32,102 @@ from .const import (
     REPO_API_URL,
 )
 
-_LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
+
+# Type alias for the coordinator's data payload.
+_CoordinatorData = dict[str, Any]
 
 
 def _parse_version(version_str: str) -> tuple[int, ...] | None:
-    """Parse a HA CalVer string (e.g. '2026.3.1') into a comparable tuple.
+    """Parse a HA CalVer string into a comparable integer tuple.
 
-    Strips a leading 'v' if present.  Returns None if parsing fails so callers
-    can fall back gracefully rather than raising.
+    Strips a leading ``v`` if present. Returns ``None`` if any part of the
+    version string is non-numeric (e.g. pre-release tags like ``2026.3.0b1``)
+    so callers can fall back gracefully rather than raising.
+
+    Args:
+        version_str: Raw version string, e.g. ``"2026.3.1"`` or ``"v2026.3"``.
+
+    Returns:
+        A tuple of integers such as ``(2026, 3, 1)``, or ``None`` on failure.
     """
     cleaned = version_str.strip().lstrip("v")
     try:
-        return tuple(int(x) for x in cleaned.split("."))
+        return tuple(int(part) for part in cleaned.split("."))
     except ValueError:
-        _LOGGER.warning("%s Could not parse version string: %r", LOG_PREFIX, version_str)
+        LOGGER.warning("%s Could not parse version string: %r", LOG_PREFIX, version_str)
         return None
 
 
 def _is_update_available(installed: str, latest: str) -> bool:
-    """Return True only when *latest* is strictly newer than *installed*.
+    """Return ``True`` only when *latest* is strictly newer than *installed*.
 
     Uses tuple comparison of integer version parts, which correctly handles
-    HA's CalVer scheme (YYYY.M.patch).  Falls back to string inequality on
+    HA's CalVer scheme (``YYYY.M.patch``). Falls back to string inequality on
     parse failure to avoid false positives.
+
+    Args:
+        installed: The currently running HA version string.
+        latest: The latest GitHub release tag (with or without leading ``v``).
+
+    Returns:
+        ``True`` if an update is available, ``False`` otherwise.
     """
-    installed_v = _parse_version(installed)
-    latest_v = _parse_version(latest)
-    if installed_v is None or latest_v is None:
+    installed_tuple = _parse_version(installed)
+    latest_tuple = _parse_version(latest)
+    if installed_tuple is None or latest_tuple is None:
+        # Non-numeric versions (pre-releases): fall back to string comparison.
         return installed.lstrip("v") != latest.lstrip("v")
-    return latest_v > installed_v
+    return latest_tuple > installed_tuple
 
 
-class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class HAContainerUpdateCoordinator(DataUpdateCoordinator[_CoordinatorData]):
     """Coordinator that fetches the latest HA release from GitHub.
 
-    Data shape returned by ``_async_update_data``:
-    {
-        "installed_version": str,   # Running HA version
-        "latest_version":   str,    # Latest GitHub release tag (stripped)
-        "release_url":      str,    # URL to GitHub release page
-        "update_available": bool,   # Parsed comparison result
-        "rate_limit_remaining": int | None,
-    }
+    The data dict returned by :meth:`_async_update_data` has the shape::
+
+        {
+            "installed_version": str,        # Running HA version
+            "latest_version":    str,        # Latest GitHub release tag (stripped)
+            "release_url":       str,        # URL to the GitHub release page
+            "update_available":  bool,       # Parsed comparison result
+            "rate_limit_remaining": int | None,
+        }
     """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        # entry is not stored as an instance attribute because it is only needed
-        # here to read the scan interval at construction time.
-        scan_seconds = entry.options.get(
+        """Initialise the coordinator with the configured poll interval.
+
+        Args:
+            hass: The Home Assistant instance.
+            entry: The active config entry. Used here only to read the scan
+                interval at construction time; not stored as an instance attr.
+        """
+        scan_seconds: int = entry.options.get(
             CONF_SCAN_INTERVAL,
             entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
         )
         super().__init__(
             hass,
-            _LOGGER,
+            LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_seconds),
         )
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch latest release information from GitHub.
+    async def _async_update_data(self) -> _CoordinatorData:
+        """Fetch the latest release information from the GitHub API.
 
-        Raises UpdateFailed on any error so the coordinator marks the entity
-        as unavailable and retries on the next interval with exponential backoff
-        provided by the base class.
+        Raises:
+            UpdateFailed: On any network error, unexpected HTTP status, or
+                missing response field. The base class will mark the entity as
+                unavailable and retry with exponential back-off.
+
+        Returns:
+            A dict describing the current and latest HA versions.
         """
         session = async_get_clientsession(self.hass)
         installed = HA_VERSION.lstrip("v")
+        rate_remaining: int | None = None
 
         try:
             async with asyncio.timeout(GITHUB_TIMEOUT):
@@ -106,7 +135,7 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     REPO_API_URL,
                     headers={"Accept": "application/vnd.github+json"},
                 ) as resp:
-                    rate_remaining: int | None = None
+                    # Read the rate-limit header before anything else.
                     raw_rate = resp.headers.get(GITHUB_RATE_LIMIT_HEADER)
                     if raw_rate is not None:
                         try:
@@ -115,18 +144,14 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             pass
 
                     if rate_remaining is not None and rate_remaining < 5:
-                        _LOGGER.warning(
-                            "%s GitHub API rate limit nearly exhausted (%s remaining). "
-                            "Returning cached data.",
+                        LOGGER.warning(
+                            "%s GitHub API rate limit nearly exhausted (%s remaining)."
+                            " Returning cached data.",
                             LOG_PREFIX,
                             rate_remaining,
                         )
-                        # Consume the response body before returning so aiohttp
-                        # can cleanly release the connection back to the pool.
+                        # Consume the body so aiohttp releases the connection.
                         await resp.read()
-                        # Return stale data rather than an error to keep the entity
-                        # available. _from_cache=True signals to log readers that
-                        # the version fields may be outdated.
                         if self.data:
                             return {
                                 **self.data,
@@ -136,19 +161,20 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     if resp.status == 403:
                         raise UpdateFailed(
-                            f"{LOG_PREFIX} GitHub API rate limited (HTTP 403). "
-                            "Will retry at next scheduled interval."
+                            f"{LOG_PREFIX} GitHub API rate limited (HTTP 403)."
+                            " Will retry at the next scheduled interval."
                         )
 
                     if resp.status == 404:
                         raise UpdateFailed(
-                            f"{LOG_PREFIX} GitHub release endpoint not found (HTTP 404). "
-                            "Check REPO_API_URL in const.py."
+                            f"{LOG_PREFIX} GitHub release endpoint not found (HTTP 404)."
+                            " Check REPO_API_URL in const.py."
                         )
 
                     if resp.status != 200:
                         raise UpdateFailed(
-                            f"{LOG_PREFIX} GitHub API returned unexpected status {resp.status}."
+                            f"{LOG_PREFIX} GitHub API returned unexpected status"
+                            f" {resp.status}."
                         )
 
                     payload: dict[str, Any] = await resp.json()
@@ -168,14 +194,14 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         update_available = _is_update_available(installed, latest)
 
         if update_available:
-            _LOGGER.info(
+            LOGGER.info(
                 "%s Update available: installed=%s  latest=%s",
                 LOG_PREFIX,
                 installed,
                 latest,
             )
         else:
-            _LOGGER.debug(
+            LOGGER.debug(
                 "%s Up to date: installed=%s  latest=%s",
                 LOG_PREFIX,
                 installed,
@@ -185,7 +211,9 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {
             "installed_version": installed,
             "latest_version": latest,
-            "release_url": f"https://github.com/home-assistant/core/releases/tag/{tag}",
+            "release_url": (
+                f"https://github.com/home-assistant/core/releases/tag/{tag}"
+            ),
             "update_available": update_available,
             "rate_limit_remaining": rate_remaining,
         }

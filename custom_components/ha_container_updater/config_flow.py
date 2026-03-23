@@ -2,10 +2,10 @@
 
 Setup flow
 ──────────
-Step 1 (user)  — collect compose directory, compose filename, service name,
-                 trigger file path, image prune preference, and poll interval.
-                 Validates that the trigger-file *directory* is accessible from
-                 inside the container (it must be a volume mount).
+Step 1 (``user``) — collect Compose directory, Compose filename, service name,
+trigger file path, image prune preference, and poll interval. Validates that
+the trigger-file *directory* is accessible from inside the container (it must
+be a volume mount).
 
 Options flow
 ────────────
@@ -43,16 +43,26 @@ from .const import (
     LOG_PREFIX,
 )
 
-_LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger(__name__)
 
 # ── Validation helpers ────────────────────────────────────────────────────────
 
 
 def _validate_trigger_dir(trigger_path: str) -> str | None:
-    """Return an error key if the trigger file's parent directory is unusable.
+    """Validate that the trigger file's parent directory is accessible.
 
-    We can only validate that the *directory* exists from inside the container.
-    A missing directory almost always means the volume mount is not configured.
+    Only the *directory* can be validated from inside the container. A missing
+    directory almost always means the volume mount is not configured in
+    ``docker-compose.yml``.
+
+    Args:
+        trigger_path: Full path intended for the trigger file, e.g.
+            ``"/tmp/ha-container-updater-trigger"``.
+
+    Returns:
+        An error key string if validation fails, or ``None`` on success.
+        Possible return values: ``"trigger_dir_not_found"``,
+        ``"trigger_dir_not_writable"``.
     """
     parent = os.path.dirname(trigger_path) or "/"
     if not os.path.isdir(parent):
@@ -63,7 +73,14 @@ def _validate_trigger_dir(trigger_path: str) -> str | None:
 
 
 def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
-    """Build a voluptuous schema pre-populated with *defaults*."""
+    """Build a voluptuous schema pre-populated with *defaults*.
+
+    Args:
+        defaults: Mapping of field keys to their current/default values.
+
+    Returns:
+        A :class:`vol.Schema` instance ready for use in an HA form step.
+    """
     return vol.Schema(
         {
             vol.Required(
@@ -98,15 +115,24 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
 
 
 class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle the initial setup config flow."""
+    """Handle the initial guided setup config flow."""
 
     VERSION = 1
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Display and process the user setup form."""
-        # Prevent duplicate entries
+        """Display and process the user setup form.
+
+        Args:
+            user_input: Form data submitted by the user, or ``None`` on the
+                first render.
+
+        Returns:
+            A :class:`ConfigFlowResult` — either showing the form again with
+            errors or creating the config entry on success.
+        """
+        # Prevent duplicate entries.
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
@@ -119,7 +145,7 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if trigger_error:
                 errors[CONF_TRIGGER_FILE_PATH] = trigger_error
             else:
-                _LOGGER.info(
+                LOGGER.info(
                     "%s Config flow completed. Trigger path: %s",
                     LOG_PREFIX,
                     user_input[CONF_TRIGGER_FILE_PATH],
@@ -135,7 +161,10 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "default_trigger": DEFAULT_TRIGGER_FILE,
-                "docs_url": "https://github.com/cskolny/ha-container-updater#volume-mount-setup",
+                "docs_url": (
+                    "https://github.com/cskolny/ha-container-updater"
+                    "#volume-mount-setup"
+                ),
             },
         )
 
@@ -144,7 +173,14 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> HAContainerUpdaterOptionsFlow:
-        """Return the options flow handler."""
+        """Return the options flow handler.
+
+        Args:
+            config_entry: The existing config entry.
+
+        Returns:
+            An :class:`HAContainerUpdaterOptionsFlow` instance.
+        """
         return HAContainerUpdaterOptionsFlow()
 
 
@@ -152,18 +188,31 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HAContainerUpdaterOptionsFlow(config_entries.OptionsFlow):
-    """Allow the user to adjust settings after initial setup."""
+    """Allow the user to adjust all settings after initial setup."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Display and process the options form."""
+        """Display and process the options form.
+
+        Args:
+            user_input: Form data submitted by the user, or ``None`` on the
+                first render.
+
+        Returns:
+            A :class:`ConfigFlowResult` — either showing the form again with
+            errors or saving the updated options on success.
+        """
         errors: dict[str, str] = {}
 
         # Merge current options on top of original data so all fields populate.
         # self.config_entry is provided by the OptionsFlow base class — do NOT
-        # store it manually in __init__ as that is deprecated since HA 2025.12.
-        current = {**self.config_entry.data, **self.config_entry.options}
+        # store it manually in __init__, as that is deprecated since HA 2024.11
+        # and broke hard in HA 2025.12.
+        current: dict[str, Any] = {
+            **self.config_entry.data,
+            **self.config_entry.options,
+        }
 
         if user_input is not None:
             trigger_error = await self.hass.async_add_executor_job(
