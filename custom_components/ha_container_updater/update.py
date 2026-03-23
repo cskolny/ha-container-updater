@@ -140,7 +140,7 @@ class HAContainerUpdateEntity(
 
         # Resolve all path/config values once at construction time so property
         # accessors remain cheap — options always take precedence over data.
-        def _opt(key: str, default: Any) -> Any:  # noqa: ANN401
+        def _opt(key: str, default: Any) -> Any:
             return entry.options.get(key, entry.data.get(key, default))
 
         self._trigger_path: str = _opt(CONF_TRIGGER_FILE_PATH, DEFAULT_TRIGGER_FILE)
@@ -225,7 +225,7 @@ class HAContainerUpdateEntity(
             else:
                 age = f"{hours} hours ago"
             return f"Last automatic backup {age}."
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             LOGGER.debug(
                 "%s Could not retrieve backup summary: %s", LOG_PREFIX, exc
             )
@@ -307,7 +307,7 @@ class HAContainerUpdateEntity(
                     "backup", "create", blocking=True
                 )
                 LOGGER.info("%s Backup completed successfully.", LOG_PREFIX)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 LOGGER.error(
                     "%s Backup failed: %s — aborting update.", LOG_PREFIX, exc
                 )
@@ -381,7 +381,7 @@ class HAContainerUpdateEntity(
 
             try:
                 await self.coordinator.async_request_refresh()
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 LOGGER.warning(
                     "%s Coordinator refresh after update failed: %s", LOG_PREFIX, exc
                 )

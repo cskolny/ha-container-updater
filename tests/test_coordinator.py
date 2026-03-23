@@ -61,7 +61,8 @@ sys.modules[
     "homeassistant.helpers.aiohttp_client"
 ].async_get_clientsession = MagicMock()  # type: ignore[attr-defined]
 
-from custom_components.ha_container_updater.coordinator import (  # noqa: E402
+# This import must follow the stub setup above (E402 suppressed in pyproject.toml per-file-ignores).
+from custom_components.ha_container_updater.coordinator import (
     _is_update_available,
     _parse_version,
 )

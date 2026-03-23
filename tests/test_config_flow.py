@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import pathlib
 import sys
 import types
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Stubs for homeassistant imports (conftest.py installs most; top-up here).
@@ -35,13 +36,11 @@ _ce.ConfigFlowResult = dict  # type: ignore[attr-defined]
 
 sys.modules["homeassistant.core"].callback = lambda f: f  # type: ignore[attr-defined]
 
-# voluptuous is a real runtime dependency — install with: pip install voluptuous
-import voluptuous as vol  # noqa: E402  (must follow stub setup)
-
-from custom_components.ha_container_updater.config_flow import (  # noqa: E402
+# These imports must follow the stub setup above (E402 suppressed in pyproject.toml per-file-ignores).
+from custom_components.ha_container_updater.config_flow import (
     _validate_trigger_dir,
 )
-from custom_components.ha_container_updater.const import (  # noqa: E402
+from custom_components.ha_container_updater.const import (
     DEFAULT_COMPOSE_DIR,
     DEFAULT_COMPOSE_FILE,
     DEFAULT_HA_SERVICE_NAME,
@@ -59,18 +58,14 @@ from custom_components.ha_container_updater.const import (  # noqa: E402
 class TestValidateTriggerDir:
     """Unit tests for the _validate_trigger_dir validation helper."""
 
-    def test_valid_writable_directory(self, tmp_path: object) -> None:
+    def test_valid_writable_directory(self, tmp_path: pathlib.Path) -> None:
         """A path inside a writable temp directory passes validation."""
-        import pathlib
-
-        trigger = str(pathlib.Path(str(tmp_path)) / "ha-container-updater-trigger")
+        trigger = str(tmp_path / "ha-container-updater-trigger")
         assert _validate_trigger_dir(trigger) is None
 
-    def test_missing_directory_returns_error_key(self, tmp_path: object) -> None:
+    def test_missing_directory_returns_error_key(self, tmp_path: pathlib.Path) -> None:
         """A path whose parent directory does not exist returns the expected key."""
-        import pathlib
-
-        trigger = str(pathlib.Path(str(tmp_path)) / "nonexistent" / "trigger")
+        trigger = str(tmp_path / "nonexistent" / "trigger")
         assert _validate_trigger_dir(trigger) == "trigger_dir_not_found"
 
     def test_root_level_path(self) -> None:
@@ -79,11 +74,9 @@ class TestValidateTriggerDir:
         # '/' exists on all POSIX systems but may not be writable in CI.
         assert result in (None, "trigger_dir_not_writable")
 
-    def test_unwritable_directory_returns_error_key(self, tmp_path: object) -> None:
+    def test_unwritable_directory_returns_error_key(self, tmp_path: pathlib.Path) -> None:
         """An existing but unwritable directory returns the expected key."""
-        import pathlib
-
-        trigger = str(pathlib.Path(str(tmp_path)) / "trigger")
+        trigger = str(tmp_path / "trigger")
         with patch("os.access", return_value=False):
             assert _validate_trigger_dir(trigger) == "trigger_dir_not_writable"
 

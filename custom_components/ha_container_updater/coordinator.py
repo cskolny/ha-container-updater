@@ -15,7 +15,6 @@ from datetime import timedelta
 from typing import Any
 
 import aiohttp
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
@@ -179,7 +178,7 @@ class HAContainerUpdateCoordinator(DataUpdateCoordinator[_CoordinatorData]):
 
                     payload: dict[str, Any] = await resp.json()
 
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        except (aiohttp.ClientError, TimeoutError) as exc:
             raise UpdateFailed(
                 f"{LOG_PREFIX} Network error fetching GitHub release: {exc}"
             ) from exc

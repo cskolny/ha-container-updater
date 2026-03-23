@@ -5,10 +5,11 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import pathlib
 import sys
 import types
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -60,6 +61,11 @@ class _CoordinatorEntity:
     def async_write_ha_state(self) -> None:
         pass
 
+    # Required so CoordinatorEntity[HAContainerUpdateCoordinator] is subscriptable
+    # at class-definition time when update.py is imported.
+    def __class_getitem__(cls, item: object) -> type:
+        return cls
+
 
 sys.modules[
     "homeassistant.helpers.update_coordinator"
@@ -73,12 +79,13 @@ class _HomeAssistantError(Exception):
 sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
 
 _dt_mod = sys.modules["homeassistant.util.dt"]
-_dt_mod.utcnow = lambda: _dt.datetime.now(_dt.timezone.utc)  # type: ignore[attr-defined]
+_dt_mod.utcnow = lambda: _dt.datetime.now(_dt.UTC)  # type: ignore[attr-defined]
 
 sys.modules["homeassistant.config_entries"].ConfigEntry = MagicMock  # type: ignore[attr-defined]
 
-from custom_components.ha_container_updater.const import TRIGGER_FILE_MAGIC  # noqa: E402
-from custom_components.ha_container_updater.update import HAContainerUpdateEntity  # noqa: E402
+# These imports must follow the stub setup above (E402 suppressed in pyproject.toml per-file-ignores).
+from custom_components.ha_container_updater.const import TRIGGER_FILE_MAGIC
+from custom_components.ha_container_updater.update import HAContainerUpdateEntity
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +93,7 @@ from custom_components.ha_container_updater.update import HAContainerUpdateEntit
 # ---------------------------------------------------------------------------
 
 
-def _make_entity(tmp_path: Any) -> HAContainerUpdateEntity:
+def _make_entity(tmp_path: pathlib.Path) -> HAContainerUpdateEntity:
     """Construct a minimally configured HAContainerUpdateEntity for testing.
 
     Args:
@@ -148,7 +155,7 @@ def _make_entity(tmp_path: Any) -> HAContainerUpdateEntity:
 class TestWriteTriggerFile:
     """Unit tests for the atomic trigger file writer."""
 
-    def test_writes_valid_json_payload(self, tmp_path: Any) -> None:
+    def test_writes_valid_json_payload(self, tmp_path: pathlib.Path) -> None:
         """The written file deserialises to the expected JSON payload."""
         path = str(tmp_path / "trigger")
         payload = json.dumps(
@@ -161,7 +168,7 @@ class TestWriteTriggerFile:
         assert data["magic"] == TRIGGER_FILE_MAGIC
         assert data["compose_dir"] == "/home/pi/homeassistant"
 
-    def test_file_ends_with_newline(self, tmp_path: Any) -> None:
+    def test_file_ends_with_newline(self, tmp_path: pathlib.Path) -> None:
         """The trigger file always ends with a newline character."""
         path = str(tmp_path / "trigger")
         HAContainerUpdateEntity._write_trigger_file(path, "{}")
@@ -169,26 +176,26 @@ class TestWriteTriggerFile:
             content = fh.read()
         assert content.endswith("\n")
 
-    def test_tmp_file_cleaned_up_on_success(self, tmp_path: Any) -> None:
+    def test_tmp_file_cleaned_up_on_success(self, tmp_path: pathlib.Path) -> None:
         """The ``.tmp`` staging file is removed after a successful rename."""
         path = str(tmp_path / "trigger")
         HAContainerUpdateEntity._write_trigger_file(path, "{}")
         assert not os.path.exists(path + ".tmp")
 
-    def test_raises_oserror_on_missing_directory(self, tmp_path: Any) -> None:
+    def test_raises_oserror_on_missing_directory(self, tmp_path: pathlib.Path) -> None:
         """Writing to a path whose parent does not exist raises OSError."""
         path = str(tmp_path / "nonexistent" / "trigger")
         with pytest.raises(OSError, match="does not exist"):
             HAContainerUpdateEntity._write_trigger_file(path, "{}")
 
-    def test_atomic_replace_leaves_no_tmp_file(self, tmp_path: Any) -> None:
+    def test_atomic_replace_leaves_no_tmp_file(self, tmp_path: pathlib.Path) -> None:
         """The final file exists and no staging ``.tmp`` file remains."""
         path = str(tmp_path / "trigger")
         HAContainerUpdateEntity._write_trigger_file(path, '{"key": "value"}')
         assert os.path.exists(path)
         assert not os.path.exists(path + ".tmp")
 
-    def test_overwrites_existing_trigger_file(self, tmp_path: Any) -> None:
+    def test_overwrites_existing_trigger_file(self, tmp_path: pathlib.Path) -> None:
         """A second write cleanly replaces the previous trigger file."""
         path = str(tmp_path / "trigger")
         HAContainerUpdateEntity._write_trigger_file(path, '{"first": true}')
@@ -206,55 +213,55 @@ class TestWriteTriggerFile:
 class TestEntityProperties:
     """Unit tests for HAContainerUpdateEntity read-only properties."""
 
-    def test_installed_version(self, tmp_path: Any) -> None:
+    def test_installed_version(self, tmp_path: pathlib.Path) -> None:
         assert _make_entity(tmp_path).installed_version == "2026.3.0"
 
-    def test_latest_version(self, tmp_path: Any) -> None:
+    def test_latest_version(self, tmp_path: pathlib.Path) -> None:
         assert _make_entity(tmp_path).latest_version == "2026.3.3"
 
-    def test_available_true_when_coordinator_ok(self, tmp_path: Any) -> None:
+    def test_available_true_when_coordinator_ok(self, tmp_path: pathlib.Path) -> None:
         assert _make_entity(tmp_path).available is True
 
-    def test_available_false_when_coordinator_fails(self, tmp_path: Any) -> None:
+    def test_available_false_when_coordinator_fails(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.last_update_success = False
         assert entity.available is False
 
-    def test_in_progress_default_is_false(self, tmp_path: Any) -> None:
+    def test_in_progress_default_is_false(self, tmp_path: pathlib.Path) -> None:
         assert _make_entity(tmp_path).in_progress is False
 
-    def test_title_is_home_assistant_core(self, tmp_path: Any) -> None:
+    def test_title_is_home_assistant_core(self, tmp_path: pathlib.Path) -> None:
         assert _make_entity(tmp_path).title == "Home Assistant Core"
 
-    def test_release_url_contains_version(self, tmp_path: Any) -> None:
+    def test_release_url_contains_version(self, tmp_path: pathlib.Path) -> None:
         assert "2026.3.3" in _make_entity(tmp_path).release_url  # type: ignore[operator]
 
-    def test_installed_version_none_when_no_data(self, tmp_path: Any) -> None:
+    def test_installed_version_none_when_no_data(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.data = None
         assert entity.installed_version is None
 
-    def test_latest_version_none_when_no_data(self, tmp_path: Any) -> None:
+    def test_latest_version_none_when_no_data(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.data = None
         assert entity.latest_version is None
 
-    def test_release_url_none_when_no_data(self, tmp_path: Any) -> None:
+    def test_release_url_none_when_no_data(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.data = None
         assert entity.release_url is None
 
-    def test_release_summary_contains_version(self, tmp_path: Any) -> None:
+    def test_release_summary_contains_version(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.hass.states.async_all = MagicMock(return_value=[])
         assert "2026.3.3" in (entity.release_summary or "")
 
-    def test_release_summary_none_when_no_update(self, tmp_path: Any) -> None:
+    def test_release_summary_none_when_no_update(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.data["update_available"] = False
         assert entity.release_summary is None
 
-    def test_release_summary_none_when_no_data(self, tmp_path: Any) -> None:
+    def test_release_summary_none_when_no_data(self, tmp_path: pathlib.Path) -> None:
         entity = _make_entity(tmp_path)
         entity.coordinator.data = None
         assert entity.release_summary is None
@@ -282,19 +289,19 @@ class TestExtraStateAttributes:
         }
     )
 
-    def test_contains_all_expected_keys(self, tmp_path: Any) -> None:
+    def test_contains_all_expected_keys(self, tmp_path: pathlib.Path) -> None:
         """All documented attribute keys must be present."""
         attrs = _make_entity(tmp_path).extra_state_attributes
         for key in self.EXPECTED_KEYS:
             assert key in attrs, f"Missing key: {key!r}"
 
-    def test_rate_limit_omitted_when_none(self, tmp_path: Any) -> None:
+    def test_rate_limit_omitted_when_none(self, tmp_path: pathlib.Path) -> None:
         """github_rate_limit_remaining must be absent when the value is None."""
         entity = _make_entity(tmp_path)
         entity.coordinator.data["rate_limit_remaining"] = None
         assert "github_rate_limit_remaining" not in entity.extra_state_attributes
 
-    def test_in_progress_reflects_internal_attr(self, tmp_path: Any) -> None:
+    def test_in_progress_reflects_internal_attr(self, tmp_path: pathlib.Path) -> None:
         """The in_progress attribute mirrors _attr_in_progress."""
         entity = _make_entity(tmp_path)
         entity._attr_in_progress = True
@@ -313,7 +320,7 @@ class TestMagicString:
         """The magic constant must match the value the watcher validates."""
         assert TRIGGER_FILE_MAGIC == "ha_container_updater_REQUESTED"
 
-    def test_trigger_payload_contains_magic(self, tmp_path: Any) -> None:
+    def test_trigger_payload_contains_magic(self, tmp_path: pathlib.Path) -> None:
         """A payload written with the magic string reads back correctly."""
         path = str(tmp_path / "trigger")
         payload = json.dumps(

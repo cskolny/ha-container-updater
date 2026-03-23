@@ -13,6 +13,7 @@ Run with::
 from __future__ import annotations
 
 import datetime as dt
+import pathlib
 import sys
 import types
 from unittest.mock import MagicMock
@@ -84,8 +85,9 @@ def _install_ha_stubs() -> None:
     ce.OptionsFlow = _OptionsFlow  # type: ignore[attr-defined]
 
     # ── homeassistant.helpers.update_coordinator ─────────────────────────────
-    # DataUpdateCoordinator and CoordinatorEntity need __class_getitem__ so
-    # the generic subscript syntax (e.g. DataUpdateCoordinator[dict]) works.
+    # Both DataUpdateCoordinator and CoordinatorEntity are used as generic base
+    # classes (e.g. DataUpdateCoordinator[dict]). They need __class_getitem__
+    # so the subscript syntax works at import time without a real HA install.
     class _DataUpdateCoordinator:
         def __init__(
             self,
@@ -108,6 +110,8 @@ def _install_ha_stubs() -> None:
         def async_write_ha_state(self) -> None:
             pass
 
+        # Required so that CoordinatorEntity[HAContainerUpdateCoordinator]
+        # in update.py's class definition is valid at import time.
         def __class_getitem__(cls, item: object) -> type:
             return cls
 
@@ -151,7 +155,7 @@ def _install_ha_stubs() -> None:
 
     # ── homeassistant.util.dt ────────────────────────────────────────────────
     sys.modules["homeassistant.util.dt"].utcnow = (  # type: ignore[attr-defined]
-        lambda: dt.datetime.now(dt.timezone.utc)
+        lambda: dt.datetime.now(dt.UTC)
     )
 
     # ── voluptuous ───────────────────────────────────────────────────────────
@@ -163,7 +167,7 @@ def _install_ha_stubs() -> None:
     vol.Schema = _Schema  # type: ignore[attr-defined]
     vol.Required = lambda key, default=None: key  # type: ignore[attr-defined]
     vol.All = lambda *args: args[0]  # type: ignore[attr-defined]
-    vol.Range = lambda min=None, max=None: None  # type: ignore[attr-defined]  # noqa: A002
+    vol.Range = lambda min=None, max=None: None  # type: ignore[attr-defined]  # min/max shadow builtins intentionally
 
 
 # Install stubs once at collection time, before any test module is imported.
@@ -174,16 +178,12 @@ _install_ha_stubs()
 
 
 @pytest.fixture
-def trigger_path(tmp_path: object) -> str:
+def trigger_path(tmp_path: pathlib.Path) -> str:
     """Return a trigger file path inside a writable temp directory."""
-    import pathlib  # noqa: PLC0415
-
-    return str(pathlib.Path(str(tmp_path)) / "ha-container-updater-trigger")
+    return str(tmp_path / "ha-container-updater-trigger")
 
 
 @pytest.fixture
-def lock_path(tmp_path: object) -> str:
+def lock_path(tmp_path: pathlib.Path) -> str:
     """Return a lock file path inside a writable temp directory."""
-    import pathlib  # noqa: PLC0415
-
-    return str(pathlib.Path(str(tmp_path)) / "ha-container-updater.lock")
+    return str(tmp_path / "ha-container-updater.lock")
