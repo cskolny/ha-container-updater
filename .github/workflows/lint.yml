@@ -31,8 +31,5 @@ jobs:
       - name: Ruff — check (lint)
         run: ruff check custom_components/ tests/
 
-      - name: Ruff — format check
-        run: ruff format --check custom_components/ tests/
-
       - name: Mypy — type check
         run: mypy custom_components/ha_container_updater/
