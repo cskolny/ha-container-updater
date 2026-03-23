@@ -37,12 +37,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
   "E402",    # Module level import not at top — stubs must be set up first
+  "I001",    # Import block sorting — deferred imports after stub setup break isort
   "S101",    # Use of assert — expected and correct in pytest test functions
   "ANN",     # Type annotations — not required in test helpers / fixtures
 ]
 
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components.ha_container_updater"]
+known-third-party = ["aiohttp", "homeassistant", "voluptuous"]
 
 [tool.ruff.format]
 quote-style = "double"

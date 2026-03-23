@@ -167,7 +167,8 @@ def _install_ha_stubs() -> None:
     vol.Schema = _Schema  # type: ignore[attr-defined]
     vol.Required = lambda key, default=None: key  # type: ignore[attr-defined]
     vol.All = lambda *args: args[0]  # type: ignore[attr-defined]
-    vol.Range = lambda min=None, max=None: None  # type: ignore[attr-defined]  # min/max shadow builtins intentionally
+    # min/max shadow builtins intentionally in this voluptuous stub
+    vol.Range = lambda min=None, max=None: None  # type: ignore[attr-defined]
 
 
 # Install stubs once at collection time, before any test module is imported.

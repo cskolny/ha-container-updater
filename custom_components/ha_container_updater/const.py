@@ -22,10 +22,12 @@ CONF_LOCK_FILE: str = "lock_file"
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 DEFAULT_COMPOSE_DIR: str = "/home/pi/homeassistant"
-DEFAULT_LOCK_FILE: str = "/tmp/ha-container-updater.lock"  # intentional /tmp use — matches systemd service default
+# Intentional /tmp use — path is volume-mounted from the host into the HA container.
+DEFAULT_LOCK_FILE: str = "/tmp/ha-container-updater.lock"
 DEFAULT_COMPOSE_FILE: str = "docker-compose.yml"
 DEFAULT_HA_SERVICE_NAME: str = "homeassistant"
-DEFAULT_TRIGGER_FILE: str = "/tmp/ha-container-updater-trigger"  # intentional /tmp use — volume-mounted by the HA container
+# Intentional /tmp use — must match HA_UPDATER_TRIGGER_FILE in the systemd service.
+DEFAULT_TRIGGER_FILE: str = "/tmp/ha-container-updater-trigger"
 DEFAULT_PRUNE_IMAGES: bool = True
 DEFAULT_SCAN_INTERVAL: int = 3600  # seconds — poll GitHub once per hour
 

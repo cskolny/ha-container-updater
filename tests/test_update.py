@@ -49,9 +49,10 @@ class _UpdateEntityFeature:
     PROGRESS = 4
 
 
-sys.modules["homeassistant.components.update"].UpdateEntity = _UpdateEntity  # type: ignore[attr-defined]
-sys.modules["homeassistant.components.update"].UpdateEntityDescription = _UpdateEntityDescription  # type: ignore[attr-defined]
-sys.modules["homeassistant.components.update"].UpdateEntityFeature = _UpdateEntityFeature  # type: ignore[attr-defined]
+_upd = sys.modules["homeassistant.components.update"]
+_upd.UpdateEntity = _UpdateEntity  # type: ignore[attr-defined]
+_upd.UpdateEntityDescription = _UpdateEntityDescription  # type: ignore[attr-defined]
+_upd.UpdateEntityFeature = _UpdateEntityFeature  # type: ignore[attr-defined]
 
 
 class _CoordinatorEntity:
@@ -76,14 +77,15 @@ class _HomeAssistantError(Exception):
     pass
 
 
-sys.modules["homeassistant.exceptions"].HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
+_exc = sys.modules["homeassistant.exceptions"]
+_exc.HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
 
 _dt_mod = sys.modules["homeassistant.util.dt"]
 _dt_mod.utcnow = lambda: _dt.datetime.now(_dt.UTC)  # type: ignore[attr-defined]
 
 sys.modules["homeassistant.config_entries"].ConfigEntry = MagicMock  # type: ignore[attr-defined]
 
-# These imports must follow the stub setup above (E402 suppressed in pyproject.toml per-file-ignores).
+# Imports below must follow stub setup (E402 + I001 suppressed via pyproject.toml).
 from custom_components.ha_container_updater.const import TRIGGER_FILE_MAGIC
 from custom_components.ha_container_updater.update import HAContainerUpdateEntity
 
