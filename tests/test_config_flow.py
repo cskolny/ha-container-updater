@@ -36,7 +36,8 @@ _ce.ConfigFlowResult = dict  # type: ignore[attr-defined]
 
 sys.modules["homeassistant.core"].callback = lambda f: f  # type: ignore[attr-defined]
 
-# These imports must follow the stub setup above (E402 suppressed in pyproject.toml per-file-ignores).
+# These imports must follow the stub setup above 
+# (E402 suppressed in pyproject.toml per-file-ignores).
 from custom_components.ha_container_updater.config_flow import (
     _validate_trigger_dir,
 )
