@@ -19,10 +19,10 @@ import logging
 import os
 from typing import Any
 
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import callback
-import voluptuous as vol
 
 from .const import (
     CONF_COMPOSE_DIR,
