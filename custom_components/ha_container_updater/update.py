@@ -103,8 +103,8 @@ async def async_setup_entry(
     async_add_entities([HAContainerUpdateEntity(coordinator, entry)])
 
 
-class HAContainerUpdateEntity(  # type: ignore[misc]
-    CoordinatorEntity[HAContainerUpdateCoordinator], UpdateEntity
+class HAContainerUpdateEntity(
+    CoordinatorEntity[HAContainerUpdateCoordinator], UpdateEntity  # type: ignore[misc]
 ):
     """Represents the Home Assistant Docker container update state.
 

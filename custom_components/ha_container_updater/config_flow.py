@@ -113,8 +113,8 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
 # ── Config flow ───────────────────────────────────────────────────────────────
 
 
-class HAContainerUpdaterConfigFlow(  # type: ignore[misc, call-arg]
-    config_entries.ConfigFlow, domain=DOMAIN
+class HAContainerUpdaterConfigFlow(
+    config_entries.ConfigFlow, domain=DOMAIN  # type: ignore[misc, call-arg]
 ):
     """Handle the initial guided setup config flow."""
 
@@ -170,7 +170,7 @@ class HAContainerUpdaterConfigFlow(  # type: ignore[misc, call-arg]
         )
 
     @staticmethod
-    @callback  # type: ignore[misc]
+    @callback  # type: ignore[untyped-decorator]
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> HAContainerUpdaterOptionsFlow:
