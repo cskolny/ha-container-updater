@@ -40,7 +40,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.update import (
     UpdateEntity,
@@ -103,7 +103,7 @@ async def async_setup_entry(
     async_add_entities([HAContainerUpdateEntity(coordinator, entry)])
 
 
-class HAContainerUpdateEntity(
+class HAContainerUpdateEntity(  # type: ignore[misc]
     CoordinatorEntity[HAContainerUpdateCoordinator], UpdateEntity
 ):
     """Represents the Home Assistant Docker container update state.
@@ -161,21 +161,21 @@ class HAContainerUpdateEntity(
     def installed_version(self) -> str | None:
         """Return the currently running HA version, or ``None`` if unknown."""
         if self.coordinator.data:
-            return self.coordinator.data.get("installed_version")
+            return cast("str | None", self.coordinator.data.get("installed_version"))
         return None
 
     @property
     def latest_version(self) -> str | None:
         """Return the latest HA release version, or ``None`` if unknown."""
         if self.coordinator.data:
-            return self.coordinator.data.get("latest_version")
+            return cast("str | None", self.coordinator.data.get("latest_version"))
         return None
 
     @property
     def release_url(self) -> str | None:
         """Return a URL to the GitHub release page, or ``None`` if unknown."""
         if self.coordinator.data:
-            return self.coordinator.data.get("release_url")
+            return cast("str | None", self.coordinator.data.get("release_url"))
         return None
 
     @property
@@ -234,7 +234,7 @@ class HAContainerUpdateEntity(
     @property
     def available(self) -> bool:
         """Return ``True`` when the coordinator last updated successfully."""
-        return self.coordinator.last_update_success
+        return cast(bool, self.coordinator.last_update_success)
 
     @property
     def in_progress(self) -> bool:

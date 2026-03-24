@@ -19,10 +19,10 @@ import logging
 import os
 from typing import Any
 
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.core import callback
+import voluptuous as vol
 
 from .const import (
     CONF_COMPOSE_DIR,
@@ -113,7 +113,9 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
 # ── Config flow ───────────────────────────────────────────────────────────────
 
 
-class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class HAContainerUpdaterConfigFlow(  # type: ignore[misc, call-arg]
+    config_entries.ConfigFlow, domain=DOMAIN
+):
     """Handle the initial guided setup config flow."""
 
     VERSION = 1
@@ -168,7 +170,7 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    @callback
+    @callback  # type: ignore[misc]
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> HAContainerUpdaterOptionsFlow:
@@ -186,7 +188,7 @@ class HAContainerUpdaterConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 # ── Options flow ──────────────────────────────────────────────────────────────
 
 
-class HAContainerUpdaterOptionsFlow(config_entries.OptionsFlow):
+class HAContainerUpdaterOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
     """Allow the user to adjust all settings after initial setup."""
 
     async def async_step_init(

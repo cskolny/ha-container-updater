@@ -84,14 +84,3 @@ module = [
 ]
 ignore_missing_imports = true
 follow_untyped_imports = true
-
-[[tool.mypy.overrides]]
-module = "custom_components.ha_container_updater.*"
-# These errors all stem from HA base classes resolving to Any due to missing
-# stubs — they are false positives, not real type errors in our code.
-disable_error_codes = [
-    "misc",              # Class cannot subclass value of type "Any" (HA stubs missing)
-    "no-any-return",     # Returning Any from function (HA types resolve to Any)
-    "call-arg",          # Unexpected keyword "domain" — HA ConfigFlow metaclass
-    "untyped-decorator", # @callback from HA resolves to Any without stubs
-]

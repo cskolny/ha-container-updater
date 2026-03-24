@@ -37,6 +37,7 @@ HA Container Updater**.
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -93,7 +94,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         ``True`` if all platforms were unloaded successfully.
     """
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = cast(bool, await hass.config_entries.async_unload_platforms(entry, PLATFORMS))
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         LOGGER.info("%s Integration unloaded.", LOG_PREFIX)

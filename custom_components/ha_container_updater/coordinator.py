@@ -80,7 +80,7 @@ def _is_update_available(installed: str, latest: str) -> bool:
     return latest_tuple > installed_tuple
 
 
-class HAContainerUpdateCoordinator(DataUpdateCoordinator[_CoordinatorData]):
+class HAContainerUpdateCoordinator(DataUpdateCoordinator[_CoordinatorData]):  # type: ignore[misc]
     """Coordinator that fetches the latest HA release from GitHub.
 
     The data dict returned by :meth:`_async_update_data` has the shape::
